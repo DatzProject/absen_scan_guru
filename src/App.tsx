@@ -4344,7 +4344,9 @@ const MonthlyRecapTab: React.FC<{
   students: Student[];
 }> = ({ onRefresh, uniqueClasses, students }) => {
   const [recapData, setRecapData] = useState<MonthlyRecap[]>([]);
-  const [selectedKelas, setSelectedKelas] = useState<string>("Semua");
+  const [selectedKelas, setSelectedKelas] = useState<string>(
+    uniqueClasses.find((k) => k !== "Semua") || ""
+  );
 
   const months = [
     "Januari",
@@ -4383,9 +4385,7 @@ const MonthlyRecapTab: React.FC<{
       selectedBulan
     );
     fetch(
-      `${endpoint}?action=monthlyRecap&kelas=${
-        selectedKelas === "Semua" ? "" : selectedKelas
-      }&bulan=${selectedBulan.toLowerCase()}`
+      `${endpoint}?action=monthlyRecap&kelas=${selectedKelas}&bulan=${selectedBulan.toLowerCase()}`
     )
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -4428,16 +4428,10 @@ const MonthlyRecapTab: React.FC<{
   }, [selectedKelas, selectedBulan, onRefresh]);
 
   const filteredRecapData = React.useMemo(() => {
-    if (selectedKelas === "Semua") {
-      return recapData;
-    }
-    console.log("Menyaring data rekap untuk kelas:", selectedKelas);
-    return recapData.filter((item) => {
-      const itemKelas = String(item.kelas).trim();
-      const result = itemKelas === selectedKelas;
-      console.log("Kelas item:", itemKelas, "cocok?", result);
-      return result;
-    });
+    if (!selectedKelas) return recapData;
+    return recapData.filter(
+      (item) => String(item.kelas).trim() === selectedKelas
+    );
   }, [recapData, selectedKelas]);
 
   const getStatusSummary = (): StatusSummary => {
@@ -5019,11 +5013,13 @@ const MonthlyRecapTab: React.FC<{
               }}
               className="border border-gray-300 rounded-lg px-1 py-0.5 shadow-sm bg-white min-w-32"
             >
-              {uniqueClasses.map((kelas) => (
-                <option key={kelas} value={kelas}>
-                  {kelas}
-                </option>
-              ))}
+              {uniqueClasses
+                .filter((kelas) => kelas !== "Semua")
+                .map((kelas) => (
+                  <option key={kelas} value={kelas}>
+                    {kelas}
+                  </option>
+                ))}
             </select>
           </div>
           <div className="text-center">
@@ -5103,6 +5099,62 @@ const MonthlyRecapTab: React.FC<{
           </div>
         ) : (
           <>
+            {(() => {
+              const total =
+                statusSummary.Hadir +
+                statusSummary.Alpha +
+                statusSummary.Izin +
+                statusSummary.Sakit;
+              const pctHadir =
+                total > 0
+                  ? ((statusSummary.Hadir / total) * 100).toFixed(1)
+                  : "0";
+              const pctAlpha =
+                total > 0
+                  ? ((statusSummary.Alpha / total) * 100).toFixed(1)
+                  : "0";
+              const pctIzin =
+                total > 0
+                  ? ((statusSummary.Izin / total) * 100).toFixed(1)
+                  : "0";
+              const pctSakit =
+                total > 0
+                  ? ((statusSummary.Sakit / total) * 100).toFixed(1)
+                  : "0";
+              return (
+                <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-center text-sm font-semibold text-gray-700 mb-2">
+                    Persentase Kehadiran {selectedBulan} — Kelas {selectedKelas}
+                  </p>
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                    <div>
+                      <div className="text-green-600 font-bold text-base">
+                        {pctHadir}%
+                      </div>
+                      <div className="text-gray-500">Hadir</div>
+                    </div>
+                    <div>
+                      <div className="text-yellow-600 font-bold text-base">
+                        {pctIzin}%
+                      </div>
+                      <div className="text-gray-500">Izin</div>
+                    </div>
+                    <div>
+                      <div className="text-blue-600 font-bold text-base">
+                        {pctSakit}%
+                      </div>
+                      <div className="text-gray-500">Sakit</div>
+                    </div>
+                    <div>
+                      <div className="text-red-600 font-bold text-base">
+                        {pctAlpha}%
+                      </div>
+                      <div className="text-gray-500">Alpha</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse border border-gray-200">
                 <thead>
@@ -5210,7 +5262,7 @@ const GraphTab: React.FC<{
     Desember: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
   });
   const [selectedKelas, setSelectedKelas] = useState<string>(
-    uniqueClasses.length > 0 ? uniqueClasses[0] : "Tidak Ada"
+    uniqueClasses.find((k) => k !== "Semua") || ""
   );
   const [selectedSemester, setSelectedSemester] = useState<"1" | "2">("2");
   const [statusVisibility, setStatusVisibility] = useState<StatusVisibility>({
@@ -5220,17 +5272,57 @@ const GraphTab: React.FC<{
     Sakit: true,
   });
   const [loading, setLoading] = useState<boolean>(true);
+  const [semesterSummary, setSemesterSummary] = useState({
+    Hadir: 0,
+    Alpha: 0,
+    Izin: 0,
+    Sakit: 0,
+  });
 
   const uniqueClassesWithDefault = React.useMemo(() => {
-    return ["Tidak Ada", ...uniqueClasses.filter((kelas) => kelas !== "Semua")];
+    return uniqueClasses.filter((kelas) => kelas !== "Semua");
   }, [uniqueClasses]);
 
   useEffect(() => {
     setLoading(true);
+
+    // Fetch 1: untuk jumlah & persentase (dari semesterRecap)
     fetch(
-      `${endpoint}?action=graphData&kelas=${
-        selectedKelas === "Tidak Ada" ? "" : selectedKelas
-      }&semester=${selectedSemester}`
+      `${endpoint}?action=semesterRecap&kelas=${selectedKelas}&semester=${selectedSemester}`
+    )
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (data.success) {
+          const recap = data.data || [];
+          const totals = recap.reduce(
+            (
+              acc: {
+                Hadir: number;
+                Alpha: number;
+                Izin: number;
+                Sakit: number;
+              },
+              item: any
+            ) => {
+              acc.Hadir += item.hadir || 0;
+              acc.Alpha += item.alpa || 0;
+              acc.Izin += item.izin || 0;
+              acc.Sakit += item.sakit || 0;
+              return acc;
+            },
+            { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 }
+          );
+          setSemesterSummary(totals);
+        }
+      })
+      .catch((error) => console.error("Error fetch semesterRecap:", error));
+
+    // Fetch 2: untuk grafik batang (dari graphData)
+    fetch(
+      `${endpoint}?action=graphData&kelas=${selectedKelas}&semester=${selectedSemester}`
     )
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -5241,25 +5333,11 @@ const GraphTab: React.FC<{
           setGraphData(data.data || {});
         } else {
           alert("❌ Gagal memuat data grafik: " + data.message);
-          setGraphData({
-            Januari: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Februari: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Maret: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            April: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Mei: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Juni: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Juli: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Agustus: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            September: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Oktober: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            November: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-            Desember: { Hadir: 0, Alpha: 0, Izin: 0, Sakit: 0 },
-          });
         }
         setLoading(false);
       })
       .catch((error) => {
-        console.error("Error fetch:", error);
+        console.error("Error fetch graphData:", error);
         alert("❌ Gagal memuat data grafik. Cek console untuk detail.");
         setLoading(false);
       });
@@ -5445,20 +5523,97 @@ const GraphTab: React.FC<{
           <div className="text-center py-8">
             <p className="text-gray-500">Memuat grafik...</p>
           </div>
-        ) : selectedKelas === "Tidak Ada" ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Tidak ada data untuk ditampilkan.</p>
-          </div>
         ) : (
-          <div
-            className="h-96"
-            style={{
-              minHeight: "300px",
-              maxHeight: "500px",
-            }}
-          >
-            <Bar data={chartData} options={chartOptions} />
-          </div>
+          <>
+            {(() => {
+              const total =
+                semesterSummary.Hadir +
+                semesterSummary.Alpha +
+                semesterSummary.Izin +
+                semesterSummary.Sakit;
+              const pctHadir =
+                total > 0
+                  ? ((semesterSummary.Hadir / total) * 100).toFixed(1)
+                  : "0";
+              const pctAlpha =
+                total > 0
+                  ? ((semesterSummary.Alpha / total) * 100).toFixed(1)
+                  : "0";
+              const pctIzin =
+                total > 0
+                  ? ((semesterSummary.Izin / total) * 100).toFixed(1)
+                  : "0";
+              const pctSakit =
+                total > 0
+                  ? ((semesterSummary.Sakit / total) * 100).toFixed(1)
+                  : "0";
+              return (
+                <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-center text-sm font-semibold text-gray-700 mb-3">
+                    Rekap Kehadiran Kelas {selectedKelas} — Semester{" "}
+                    {selectedSemester}
+                  </p>
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm mb-2">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                      <div className="text-green-600 font-bold text-base">
+                        {semesterSummary.Hadir}
+                      </div>
+                      <div className="text-gray-500 text-xs">Hadir</div>
+                    </div>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                      <div className="text-yellow-600 font-bold text-base">
+                        {semesterSummary.Izin}
+                      </div>
+                      <div className="text-gray-500 text-xs">Izin</div>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                      <div className="text-blue-600 font-bold text-base">
+                        {semesterSummary.Sakit}
+                      </div>
+                      <div className="text-gray-500 text-xs">Sakit</div>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                      <div className="text-red-600 font-bold text-base">
+                        {semesterSummary.Alpha}
+                      </div>
+                      <div className="text-gray-500 text-xs">Alpha</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                    <div>
+                      <div className="text-green-600 font-bold">
+                        {pctHadir}%
+                      </div>
+                      <div className="text-gray-400 text-xs">Hadir</div>
+                    </div>
+                    <div>
+                      <div className="text-yellow-600 font-bold">
+                        {pctIzin}%
+                      </div>
+                      <div className="text-gray-400 text-xs">Izin</div>
+                    </div>
+                    <div>
+                      <div className="text-blue-600 font-bold">{pctSakit}%</div>
+                      <div className="text-gray-400 text-xs">Sakit</div>
+                    </div>
+                    <div>
+                      <div className="text-red-600 font-bold">{pctAlpha}%</div>
+                      <div className="text-gray-400 text-xs">Alpha</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            <div
+              className="h-96"
+              style={{
+                minHeight: "300px",
+                maxHeight: "500px",
+              }}
+            >
+              <Bar data={chartData} options={chartOptions} />
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -5473,7 +5628,9 @@ const SemesterRecapTab: React.FC<{
   students, // ✅ DAN INI
 }) => {
   const [recapData, setRecapData] = useState<SemesterRecap[]>([]);
-  const [selectedKelas, setSelectedKelas] = useState<string>("Semua");
+  const [selectedKelas, setSelectedKelas] = useState<string>(
+    uniqueClasses.find((k) => k !== "Semua") || ""
+  );
   const [selectedSemester, setSelectedSemester] = useState<"1" | "2">("1");
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
@@ -5538,9 +5695,7 @@ const SemesterRecapTab: React.FC<{
   }, [selectedKelas, selectedSemester]);
 
   const filteredRecapData = React.useMemo(() => {
-    if (selectedKelas === "Semua") {
-      return recapData;
-    }
+    if (!selectedKelas) return recapData;
     return recapData.filter(
       (item) => String(item.kelas).trim() === selectedKelas
     );
@@ -6123,11 +6278,13 @@ const SemesterRecapTab: React.FC<{
               onChange={(e) => setSelectedKelas(e.target.value)}
               className="border border-gray-300 rounded-lg px-1 py-0.5 shadow-sm bg-white min-w-32"
             >
-              {uniqueClasses.map((kelas) => (
-                <option key={kelas} value={kelas}>
-                  {kelas}
-                </option>
-              ))}
+              {uniqueClasses
+                .filter((kelas) => kelas !== "Semua")
+                .map((kelas) => (
+                  <option key={kelas} value={kelas}>
+                    {kelas}
+                  </option>
+                ))}
             </select>
           </div>
           <div className="text-center">
@@ -6205,6 +6362,65 @@ const SemesterRecapTab: React.FC<{
           </div>
         ) : (
           <>
+            {/* Persentase Keseluruhan */}
+            {(() => {
+              const total =
+                statusSummary.Hadir +
+                statusSummary.Alpha +
+                statusSummary.Izin +
+                statusSummary.Sakit;
+              const pctHadir =
+                total > 0
+                  ? ((statusSummary.Hadir / total) * 100).toFixed(1)
+                  : "0";
+              const pctAlpha =
+                total > 0
+                  ? ((statusSummary.Alpha / total) * 100).toFixed(1)
+                  : "0";
+              const pctIzin =
+                total > 0
+                  ? ((statusSummary.Izin / total) * 100).toFixed(1)
+                  : "0";
+              const pctSakit =
+                total > 0
+                  ? ((statusSummary.Sakit / total) * 100).toFixed(1)
+                  : "0";
+              return (
+                <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-center text-sm font-semibold text-gray-700 mb-2">
+                    Persentase Kehadiran Semester {selectedSemester} — Kelas{" "}
+                    {selectedKelas}
+                  </p>
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                    <div>
+                      <div className="text-green-600 font-bold text-base">
+                        {pctHadir}%
+                      </div>
+                      <div className="text-gray-500">Hadir</div>
+                    </div>
+                    <div>
+                      <div className="text-yellow-600 font-bold text-base">
+                        {pctIzin}%
+                      </div>
+                      <div className="text-gray-500">Izin</div>
+                    </div>
+                    <div>
+                      <div className="text-blue-600 font-bold text-base">
+                        {pctSakit}%
+                      </div>
+                      <div className="text-gray-500">Sakit</div>
+                    </div>
+                    <div>
+                      <div className="text-red-600 font-bold text-base">
+                        {pctAlpha}%
+                      </div>
+                      <div className="text-gray-500">Alpha</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse border border-gray-200">
                 <thead>
