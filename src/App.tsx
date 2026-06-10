@@ -5637,6 +5637,7 @@ const SemesterRecapTab: React.FC<{
   );
 
   const [loading, setLoading] = useState<boolean>(true);
+  const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
   const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
 
   useEffect(() => {
@@ -5718,6 +5719,76 @@ const SemesterRecapTab: React.FC<{
   };
 
   const statusSummary = getStatusSummary();
+  const getPotongan = (jumlah: number): number => {
+    if (jumlah <= 3) return 0;
+    if (jumlah <= 6) return 3;
+    if (jumlah <= 15) return 6;
+    if (jumlah <= 20) return 10;
+    return 15;
+  };
+
+  const downloadPreviewExcel = () => {
+    const headers = [
+      "No.",
+      "Nama",
+      "Pengurangan Alpha",
+      "Pengurangan Izin",
+      "Pengurangan Sakit",
+    ];
+
+    const data = [
+      headers,
+      ...filteredRecapData.map((item, index) => {
+        const potongAlpha = getPotongan(item.alpa || 0);
+        const potongIzin = getPotongan(item.izin || 0);
+        const potongSakit = getPotongan(item.sakit || 0);
+        return [
+          index + 1,
+          item.nama || "N/A",
+          potongAlpha,
+          potongIzin,
+          potongSakit,
+        ];
+      }),
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"] = [
+      { wch: 5 }, // No.
+      { wch: 25 }, // Nama
+      { wch: 20 }, // Pengurangan Alpha
+      { wch: 20 }, // Pengurangan Izin
+      { wch: 20 }, // Pengurangan Sakit
+    ];
+
+    const headerStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: "FFFF00" } },
+      alignment: { horizontal: "center" },
+    };
+    headers.forEach((_, index) => {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: index });
+      ws[cellAddress] = { ...ws[cellAddress], s: headerStyle };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Pengurangan Kehadiran");
+
+    const date = new Date()
+      .toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+      .replace(/ /g, "_")
+      .replace(/:/g, "-");
+
+    const fileName = `Pengurangan_Kehadiran_${selectedSemester}_${selectedKelas}_${date}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
 
   const downloadExcel = () => {
     const headers = [
@@ -6502,10 +6573,164 @@ const SemesterRecapTab: React.FC<{
               >
                 📄 Download PDF
               </button>
+              {/* ✅ TOMBOL BARU */}
+              <button
+                onClick={() => setShowPreviewModal(true)}
+                className="px-1 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                👁️ Preview Pengurangan
+              </button>
             </div>
           </>
         )}
       </div>
+      {/* ✅ MODAL PREVIEW POTONGAN */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col"
+              style={{ maxHeight: "90vh" }}
+            >
+              {/* Header Modal */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    👁️ Preview Pengurangan Data Kehadiran
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Kelas {selectedKelas} — Semester {selectedSemester}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Keterangan aturan potongan */}
+              <div className="px-6 py-3 bg-yellow-50 border-b border-yellow-100">
+                <p className="text-xs font-semibold text-yellow-700 mb-1">
+                  Aturan Pengurangan (berlaku untuk Alpha, Izin, dan Sakit
+                  masing-masing):
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs text-yellow-800">
+                  {[
+                    "0–3 → pengurangan 0",
+                    "4–6 → pengurangan 3",
+                    "7–15 → pengurangan 6",
+                    "16–20 → pengurangan 10",
+                    "≥21 → pengurangan 15",
+                  ].map((rule) => (
+                    <span
+                      key={rule}
+                      className="bg-yellow-100 border border-yellow-200 rounded px-2 py-0.5"
+                    >
+                      {rule}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tabel */}
+              <div className="overflow-y-auto overflow-x-auto flex-1 px-6 py-4 min-h-0">
+                <table className="min-w-full border-collapse border border-gray-200 text-sm">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-gray-700">
+                        No.
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-left font-semibold text-gray-700">
+                        Nama
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-gray-700">
+                        Alpha
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-yellow-700 bg-yellow-50">
+                        Pengurangan Alpha
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-gray-700">
+                        Izin
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-yellow-700 bg-yellow-50">
+                        Pengurangan Izin
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-gray-700">
+                        Sakit
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1 text-center font-semibold text-yellow-700 bg-yellow-50">
+                        Pengurangan Sakit
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRecapData.map((item, index) => {
+                      const alpha = item.alpa || 0;
+                      const izin = item.izin || 0;
+                      const sakit = item.sakit || 0;
+                      const potongAlpha = getPotongan(alpha);
+                      const potongIzin = getPotongan(izin);
+                      const potongSakit = getPotongan(sakit);
+
+                      return (
+                        <tr
+                          key={index}
+                          className={
+                            index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                          }
+                        >
+                          <td className="border border-gray-200 px-2 py-0.5 text-center text-gray-600">
+                            {index + 1}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-gray-700">
+                            {item.nama || "N/A"}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-center text-gray-600">
+                            {alpha}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-center font-medium text-yellow-700 bg-yellow-50">
+                            {potongAlpha > 0 ? `${potongAlpha}` : "0"}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-center text-gray-600">
+                            {izin}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-center font-medium text-yellow-700 bg-yellow-50">
+                            {potongIzin > 0 ? `${potongIzin}` : "0"}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-center text-gray-600">
+                            {sakit}
+                          </td>
+                          <td className="border border-gray-200 px-2 py-0.5 text-center font-medium text-yellow-700 bg-yellow-50">
+                            {potongSakit > 0 ? `${potongSakit}` : "0"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer Modal */}
+              <div className="px-6 py-3 border-t border-gray-200 flex justify-between items-center">
+                <button
+                  onClick={downloadPreviewExcel}
+                  className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-sm"
+                >
+                  📥 Download Excel
+                </button>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
