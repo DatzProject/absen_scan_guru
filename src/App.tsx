@@ -33,7 +33,7 @@ ChartJS.register(
 );
 
 const endpoint =
-  "https://script.google.com/macros/s/AKfycby7Duu913yUSeEvnz3opEHv9s2nqEW0rVmHlXZllLEx9Bbz3t5Cw2GW_2FzWIaxzsJV/exec";
+  "https://script.google.com/macros/s/AKfycbymqwNG3PBG9QpE8Dta1oqcdaljjuiApThDaD_jqcKyDrB0by_LARGENjDInfe04KJp/exec";
 const SHEET_SEMESTER1 = "RekapSemester1";
 const SHEET_SEMESTER2 = "RekapSemester2";
 
@@ -5639,6 +5639,8 @@ const SemesterRecapTab: React.FC<{
   const [loading, setLoading] = useState<boolean>(true);
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
   const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
+  const [downloadingPreviewExcel, setDownloadingPreviewExcel] =
+    useState<boolean>(false);
 
   useEffect(() => {
     setLoading(true);
@@ -5727,67 +5729,42 @@ const SemesterRecapTab: React.FC<{
     return 15;
   };
 
-  const downloadPreviewExcel = () => {
-    const headers = [
-      "No.",
-      "Nama",
-      "Pengurangan Alpha",
-      "Pengurangan Izin",
-      "Pengurangan Sakit",
-    ];
+  const downloadPreviewExcel = async () => {
+    setDownloadingPreviewExcel(true);
+    try {
+      const payload = {
+        type: "generatePreviewExcel",
+        kelas: selectedKelas,
+        semester: selectedSemester,
+        data: filteredRecapData.map((item) => ({
+          nama: item.nama || "N/A",
+          potongAlpha: getPotongan(item.alpa || 0),
+          potongIzin: getPotongan(item.izin || 0),
+          potongSakit: getPotongan(item.sakit || 0),
+        })),
+      };
 
-    const data = [
-      headers,
-      ...filteredRecapData.map((item, index) => {
-        const potongAlpha = getPotongan(item.alpa || 0);
-        const potongIzin = getPotongan(item.izin || 0);
-        const potongSakit = getPotongan(item.sakit || 0);
-        return [
-          index + 1,
-          item.nama || "N/A",
-          potongAlpha,
-          potongIzin,
-          potongSakit,
-        ];
-      }),
-    ];
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    ws["!cols"] = [
-      { wch: 5 }, // No.
-      { wch: 25 }, // Nama
-      { wch: 20 }, // Pengurangan Alpha
-      { wch: 20 }, // Pengurangan Izin
-      { wch: 20 }, // Pengurangan Sakit
-    ];
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const result = await res.json();
 
-    const headerStyle = {
-      font: { bold: true },
-      fill: { fgColor: { rgb: "FFFF00" } },
-      alignment: { horizontal: "center" },
-    };
-    headers.forEach((_, index) => {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: index });
-      ws[cellAddress] = { ...ws[cellAddress], s: headerStyle };
-    });
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Pengurangan Kehadiran");
-
-    const date = new Date()
-      .toLocaleString("id-ID", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      })
-      .replace(/ /g, "_")
-      .replace(/:/g, "-");
-
-    const fileName = `Pengurangan_Kehadiran_${selectedSemester}_${selectedKelas}_${date}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+      if (result.success && result.url) {
+        window.open(result.url, "_blank");
+      } else {
+        alert(
+          `❌ Gagal membuat file Excel: ${result.message || "Unknown error"}`
+        );
+      }
+    } catch (error) {
+      console.error("Error downloadPreviewExcel:", error);
+      alert("❌ Gagal membuat file Excel. Cek console untuk detail.");
+    } finally {
+      setDownloadingPreviewExcel(false);
+    }
   };
 
   const downloadPreviewPDF = () => {
@@ -6802,9 +6779,12 @@ const SemesterRecapTab: React.FC<{
                 <div className="flex gap-2">
                   <button
                     onClick={downloadPreviewExcel}
-                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-sm"
+                    disabled={downloadingPreviewExcel}
+                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-sm disabled:opacity-50"
                   >
-                    📥 Download Excel
+                    {downloadingPreviewExcel
+                      ? "⏳ Membuat file..."
+                      : "📥 Download Excel"}
                   </button>
                   <button
                     onClick={downloadPreviewPDF}
