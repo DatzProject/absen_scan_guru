@@ -5790,6 +5790,91 @@ const SemesterRecapTab: React.FC<{
     XLSX.writeFile(wb, fileName);
   };
 
+  const downloadPreviewPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    let currentY = margin;
+
+    doc.setFont("Times", "roman");
+
+    const namaSekolah = schoolData?.namaSekolah || "UPT SDN 13 BATANG";
+    const semesterLabel =
+      selectedSemester === "1" ? "SEMESTER 1" : "SEMESTER 2";
+    const title = `PREVIEW PENGURANGAN KEHADIRAN KELAS ${selectedKelas}  ${namaSekolah}  ${semesterLabel}`;
+
+    doc.setFontSize(11);
+    doc.setFont("Times", "bold");
+    doc.text(title, pageWidth / 2, currentY, { align: "center" });
+    currentY += 8;
+
+    const headers = [
+      "No.",
+      "Nama",
+      "Alpha",
+      "Pot. Alpha",
+      "Izin",
+      "Pot. Izin",
+      "Sakit",
+      "Pot. Sakit",
+    ];
+
+    const body = filteredRecapData.map((item, index) => {
+      const alpha = item.alpa || 0;
+      const izin = item.izin || 0;
+      const sakit = item.sakit || 0;
+      return [
+        index + 1,
+        item.nama || "N/A",
+        alpha,
+        getPotongan(alpha),
+        izin,
+        getPotongan(izin),
+        sakit,
+        getPotongan(sakit),
+      ];
+    });
+
+    autoTable(doc, {
+      head: [headers],
+      body,
+      startY: currentY,
+      styles: { font: "Times", fontSize: 8, cellPadding: 2, halign: "center" },
+      headStyles: {
+        fillColor: [255, 255, 0],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        1: { halign: "left", cellWidth: 45 },
+      },
+      alternateRowStyles: { fillColor: [240, 240, 240] },
+      didParseCell: (data) => {
+        // Highlight kolom pengurangan (index 3, 5, 7)
+        if ([3, 5, 7].includes(data.column.index) && data.section === "body") {
+          data.cell.styles.fillColor = [255, 251, 235];
+          data.cell.styles.textColor = [161, 98, 7];
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+
+    const date = new Date()
+      .toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+      .replace(/ /g, "_")
+      .replace(/:/g, "-");
+
+    const fileName = `Preview_Pengurangan_${selectedSemester}_${selectedKelas}_${date}.pdf`;
+    doc.save(fileName);
+  };
+
   const downloadExcel = () => {
     const headers = [
       "No.",
@@ -6714,12 +6799,20 @@ const SemesterRecapTab: React.FC<{
 
               {/* Footer Modal */}
               <div className="px-6 py-3 border-t border-gray-200 flex justify-between items-center">
-                <button
-                  onClick={downloadPreviewExcel}
-                  className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-sm"
-                >
-                  📥 Download Excel
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={downloadPreviewExcel}
+                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-sm"
+                  >
+                    📥 Download Excel
+                  </button>
+                  <button
+                    onClick={downloadPreviewPDF}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm"
+                  >
+                    📄 Download PDF
+                  </button>
+                </div>
                 <button
                   onClick={() => setShowPreviewModal(false)}
                   className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors text-sm"
