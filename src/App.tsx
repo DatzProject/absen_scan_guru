@@ -5732,31 +5732,18 @@ const SemesterRecapTab: React.FC<{
   const downloadPreviewExcel = async () => {
     setDownloadingPreviewExcel(true);
     try {
-      const payload = {
-        type: "generatePreviewExcel",
-        kelas: selectedKelas,
-        semester: selectedSemester,
-        data: filteredRecapData.map((item) => ({
-          nama: item.nama || "N/A",
-          potongAlpha: getPotongan(item.alpa || 0),
-          potongIzin: getPotongan(item.izin || 0),
-          potongSakit: getPotongan(item.sakit || 0),
-        })),
-      };
+      const response = await fetch(
+        `${endpoint}?action=generatePreviewExcel&kelas=${encodeURIComponent(
+          selectedKelas
+        )}&semester=${selectedSemester}`
+      );
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
 
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const result = await res.json();
-
-      if (result.success && result.base64) {
-        downloadBase64AsFile(
-          result.base64,
-          result.fileName || "Preview_Pengurangan.xlsx"
-        );
+      if (result.success && result.url) {
+        window.open(result.url, "_blank");
       } else {
         alert(
           `❌ Gagal membuat file Excel: ${result.message || "Unknown error"}`
