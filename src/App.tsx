@@ -33,7 +33,7 @@ ChartJS.register(
 );
 
 const endpoint =
-  "https://script.google.com/macros/s/AKfycbymqwNG3PBG9QpE8Dta1oqcdaljjuiApThDaD_jqcKyDrB0by_LARGENjDInfe04KJp/exec";
+  "https://script.google.com/macros/s/AKfycbwF56MHSlGvCx7MlQ1LDi6vXVr8IO-gYEFlV7tiERC0r8urlJClhbxgmbOgr75uAkgh/exec";
 const SHEET_SEMESTER1 = "RekapSemester1";
 const SHEET_SEMESTER2 = "RekapSemester2";
 
@@ -5620,6 +5620,27 @@ const GraphTab: React.FC<{
   );
 };
 
+function downloadBase64AsFile(base64Data: string, fileName: string) {
+  const byteCharacters = atob(base64Data);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 const SemesterRecapTab: React.FC<{
   uniqueClasses: string[];
   students: Student[]; // ✅ TAMBAHKAN INI
@@ -5752,8 +5773,11 @@ const SemesterRecapTab: React.FC<{
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const result = await res.json();
 
-      if (result.success && result.url) {
-        window.open(result.url, "_blank");
+      if (result.success && result.base64) {
+        downloadBase64AsFile(
+          result.base64,
+          result.fileName || "Preview_Pengurangan.xlsx"
+        );
       } else {
         alert(
           `❌ Gagal membuat file Excel: ${result.message || "Unknown error"}`
