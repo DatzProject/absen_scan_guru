@@ -33,7 +33,7 @@ ChartJS.register(
 );
 
 const endpoint =
-  "https://script.google.com/macros/s/AKfycbwgcBkzULgBduyOLp-DJd7ewWiVc4V052eyR57xXW3Dh8208Z8OGzjswiG7ntoKt_co/exec";
+  "https://script.google.com/macros/s/AKfycbxAvK_KkY10IoaqXGSUxSLwycMmxnAyqoQAX91hkFJ3a3_1_EhhZmO1aehoXVCV2BFC/exec";
 const SHEET_SEMESTER1 = "RekapSemester1";
 const SHEET_SEMESTER2 = "RekapSemester2";
 
@@ -5742,8 +5742,17 @@ const SemesterRecapTab: React.FC<{
         throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
 
-      if (result.success && result.url) {
-        window.open(result.url, "_blank");
+      if (result.success && result.base64) {
+        const dataUri =
+          "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," +
+          result.base64;
+
+        const link = document.createElement("a");
+        link.href = dataUri;
+        link.download = result.fileName || "Preview_Pengurangan.xlsx";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
         alert(
           `❌ Gagal membuat file Excel: ${result.message || "Unknown error"}`
