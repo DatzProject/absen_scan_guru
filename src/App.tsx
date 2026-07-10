@@ -33,7 +33,7 @@ ChartJS.register(
 );
 
 const endpoint =
-  "https://script.google.com/macros/s/AKfycbxRWstMpandNQZbXo9V5HDuy7eKno5KI_ooSdHnYNS0vXtrw2XwmlFE4g2QA-2IrEyU/exec";
+  "https://script.google.com/macros/s/AKfycbwybX1wKgTu14cZgaPeVFHI770iRL2Owjb7N3vGe2rWiwK-uJD5F8t8-EmrNacURlij/exec";
 const SHEET_SEMESTER1 = "RekapSemester1";
 const SHEET_SEMESTER2 = "RekapSemester2";
 
@@ -5731,44 +5731,24 @@ const SemesterRecapTab: React.FC<{
 
   const downloadPreviewExcel = async () => {
     setDownloadingPreviewExcel(true);
+
     try {
       const response = await fetch(
         `${endpoint}?action=generatePreviewExcel&kelas=${encodeURIComponent(
           selectedKelas
         )}&semester=${selectedSemester}`
       );
-
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
 
-      if (result.success && result.base64) {
-        const byteCharacters = atob(result.base64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
-
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = result.fileName || "Preview_Pengurangan.xlsx";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      if (result.success) {
+        window.open(result.url, "_blank");
       } else {
-        alert(
-          `❌ Gagal membuat file Excel: ${result.message || "Unknown error"}`
-        );
+        alert("❌ Gagal generate Excel: " + (result.message || result.error));
       }
-    } catch (error) {
-      console.error("Error downloadPreviewExcel:", error);
-      alert("❌ Gagal membuat file Excel. Cek console untuk detail.");
+    } catch (err) {
+      alert(
+        "❌ Error: " + (err instanceof Error ? err.message : "Unknown error")
+      );
     } finally {
       setDownloadingPreviewExcel(false);
     }
