@@ -33,7 +33,7 @@ ChartJS.register(
 );
 
 const endpoint =
-  "https://script.google.com/macros/s/AKfycbxAvK_KkY10IoaqXGSUxSLwycMmxnAyqoQAX91hkFJ3a3_1_EhhZmO1aehoXVCV2BFC/exec";
+  "https://script.google.com/macros/s/AKfycbxRWstMpandNQZbXo9V5HDuy7eKno5KI_ooSdHnYNS0vXtrw2XwmlFE4g2QA-2IrEyU/exec";
 const SHEET_SEMESTER1 = "RekapSemester1";
 const SHEET_SEMESTER2 = "RekapSemester2";
 
@@ -5743,16 +5743,24 @@ const SemesterRecapTab: React.FC<{
       const result = await response.json();
 
       if (result.success && result.base64) {
-        const dataUri =
-          "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," +
-          result.base64;
+        const byteCharacters = atob(result.base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
 
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.href = dataUri;
+        link.href = url;
         link.download = result.fileName || "Preview_Pengurangan.xlsx";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       } else {
         alert(
           `❌ Gagal membuat file Excel: ${result.message || "Unknown error"}`
